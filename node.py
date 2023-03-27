@@ -3,24 +3,11 @@ from collections import deque
 import time
 import os
 import psutil
-import requests
-import socket
 
 app = Flask(__name__)
 
 if not os.path.exists('files'):
     os.makedirs('files')
-
-# Создаем список нод для пинга
-nodes = ['https://ResponsibleCreativeInteger.x1ag1.repl.co']
-
-# Пингуем ноды при старте
-for BACKUP_SERVER_URL in nodes:
-    try:
-        free = requests.get(f'{BACKUP_SERVER_URL}/status').json()['free_space']
-        print(f'{BACKUP_SERVER_URL} - {free}Kb free')
-    except requests.exceptions.ConnectionError:
-        print('R.I.P. - ', BACKUP_SERVER_URL)
 
 # Создаем словарь для хранения очередей запросов от каждого IP
 ip_queue = {}
@@ -49,7 +36,7 @@ def is_allowed(ip):
 def limit_requests():
     if not is_allowed(request.remote_addr):
         return jsonify({'error': 'Too many requests'}), 429, {'Content-Type': 'application/json'}
-    
+
 
 @app.route('/', methods=['HEAD'])
 def head():
@@ -122,44 +109,21 @@ def load_file():
     # Получаем имя файла с расширением
     filename = file.filename
 
-    # Получаем информацию о свободном месте на диске в килобайтах на главном сервере
+    # Получаем информацию о свободном месте на диске в килобайтах
     free_space = psutil.disk_usage('/').free // 1024
     # Получаем размер файла, который будет сохранен на диск в килобайтах
     file_size = len(file.read()) // 1024
 
-    # Получаем hostname сервера
-    hostname = socket.gethostname()
-    # Получаем IP-адрес сервера
-    ip_address = socket.gethostbyname(hostname)
-
-    # Формируем ссылку на сервер
-    server_url = f"http://{ip_address}"
-    if request.host:
-        server_url = f"{request.scheme}://{request.host}"
-
-    # Проверяем, что на главном сервере достаточно свободного места для сохранения файла
+    # Проверяем, что на диске достаточно свободного места для сохранения файла
     if file_size >= free_space:
-        for BACKUP_SERVER_URL in nodes:
-            try:
-                free = requests.get(f'{BACKUP_SERVER_URL}/status').json()['free_space']
-            except requests.exceptions.ConnectionError:
-                continue
-            if free > file_size:
-                # Если на ноде есть свободное место, загружаем файл на диск
-                response = requests.post(f'{BACKUP_SERVER_URL}/load', files={'file': file})
-                if response.status_code == 200:
-                    # Если файл успешно сохранен на резервном сервере, возвращаем ссылку на него
-                    return jsonify({'file_link': f'{BACKUP_SERVER_URL}/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
-                else:
-                    # Если произошла ошибка при сохранении файла на резервном сервере, возвращаем ошибку
-                    continue
-    else:
-        # Если на главном сервере достаточно места, сохраняем файл на нем
-        file.seek(0) # сбрасываем указатель на начало файла
-        file.save(os.path.join(os.getcwd(), 'files', filename))
+        return jsonify({'error': 'Not enough free space on disk'}), 400, {'Content-Type': 'application/json'}
 
-        # Возвращаем ссылку на загруженный файл в JSON формате
-        return jsonify({'file_link': f'{server_url}/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
+    # Сохраняем файл по пути, указывая имя файла
+    file.seek(0) # сбрасываем указатель на начало файла
+    file.save(os.path.join(os.getcwd(), 'files', filename))
+
+    # Возвращаем ссылку на загруженный файл в JSON формате
+    return jsonify({'file_link': f'/download/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
 
 
 
