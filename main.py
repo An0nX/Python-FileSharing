@@ -12,7 +12,7 @@ if not os.path.exists('files'):
     os.makedirs('files')
 
 # Создаем список нод для пинга
-nodes = ['https://ResponsibleCreativeInteger.x1ag1.repl.co']
+nodes = []
 
 # Пингуем ноды при старте
 for BACKUP_SERVER_URL in nodes:
