@@ -12,6 +12,3 @@
 
 ### Чтение файла с сервера
 Реализовано в [getcontent.py](https://github.com/httpshotmaker/Python-FileSharing/blob/main/getcontent.py)
-
-### Скачивание файла с сервера
-Реализовано в [download.py](https://github.com/httpshotmaker/Python-FileSharing/blob/main/download.py)
