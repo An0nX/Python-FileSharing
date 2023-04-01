@@ -8,7 +8,7 @@
 Для запуска сервера вам требуется запустить main.py, а чтобы вместо IP серверу выдало домен вам требуется, соответственно, свервер с доменом
 
 ### Отправка файлов на сервер
-Реализована в [send_to_server.py](https://github.com/httpshotmaker/Python-FileSharing/blob/main/send_to_server.py)
+Реализована в [send_to_server.py](https://github.com/httpshotmaker/Python-FileSharing/blob/main/API/send_to_server.py)
 
 ### Чтение файла с сервера
-Реализовано в [getcontent.py](https://github.com/httpshotmaker/Python-FileSharing/blob/main/getcontent.py)
+Реализовано в [getcontent.py](https://github.com/httpshotmaker/Python-FileSharing/blob/main/API/getcontent.py)
