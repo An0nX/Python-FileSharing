@@ -129,7 +129,7 @@ def load_file():
         server_url = f"{request.scheme}://{request.host}"
 
     # Возвращаем ссылку на загруженный файл в JSON формате
-    return jsonify({'file_link': f'{server_url}/download/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
+    return jsonify({'file_link': f'{server_url}/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
 
 
 
