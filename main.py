@@ -12,15 +12,22 @@ if not os.path.exists('files'):
     os.makedirs('files')
 
 # Создаем список нод для пинга
-nodes = []
+nodes = ['NODE', 'NODE']
 
 # Пингуем ноды при старте
-for BACKUP_SERVER_URL in nodes:
+for node in nodes:
     try:
-        free = requests.get(f'{BACKUP_SERVER_URL}/status').json()['free_space']
-        print(f'{BACKUP_SERVER_URL} - {free}Kb free')
-    except requests.exceptions.ConnectionError:
-        print('R.I.P. - ', BACKUP_SERVER_URL)
+        free = requests.get(f'{node}/status').json()['free_space']
+        print(f'{node} - {free}Kb free')
+    except requests.exceptions:
+        print('R.I.P. - ', node)
+
+# Создаем переменные-блокираторы и пароль
+lock_get_file = False
+lock_load_file = True
+lock_status = False
+
+password = r'YOURPASSHERE'
 
 # Создаем словарь для хранения очередей запросов от каждого IP
 ip_queue = {}
@@ -70,41 +77,35 @@ def favicon():
 def get_file(filename):
     """
     It opens a file and returns the file object.
-    
+
     :param filename: The name of the file you want to download
     """
-    return (
-        (
+    if lock_get_file and request.args.get('key') != password:
+        return jsonify({'error': 'Access denied'}), 403, {'Content-Type': 'application/json'}
+    if os.path.isfile(os.path.join('files', filename)):
+        # Если файл найден на главном сервере, возвращаем его
+        return (
             open(os.path.join('files', filename), 'r').read(),
             200,
             {'Content-Type': 'application/json'},
         )
-        if os.path.isfile(os.path.join('files', filename))
-        else (
-            jsonify({'error': 'File not found'}),
-            404,
-            {'Content-Type': 'application/json'},
-        )
+    # Если файл не найден на главном сервере, ищем его на всех узлах
+    for node in nodes:
+        try:
+            # Отправляем запрос на проверку наличия файла на узле
+            response = requests.get(f"{node}/{filename}", params={'key': password})
+            if response.status_code == 200:
+                # Если файл найден на узле, возвращаем его
+                return response.content, 200, {'Content-Type': 'application/json'}
+        except:
+            # Если узел недоступен, переходим к следующему
+            continue
+    # Если файл не найден на главном сервере и на узлах, возвращаем ошибку
+    return (
+        jsonify({'error': 'File not found'}),
+        404,
+        {'Content-Type': 'application/json'},
     )
-
-
-@app.route("/download/<filename>")
-def download_file(filename):
-    """
-    It downloads a file from the server.
-    
-    :param filename: The name of the file you want to download
-    """
-    # Проверяем, что запрашиваемый файл существует
-    if not os.path.isfile(os.path.join(os.getcwd(), 'files', filename)):
-        return jsonify({'error': 'File not found'}), 404, {'Content-Type': 'application/json'}
-
-    # Проверяем, что запрашиваемый файл соответствует требуемому файлу
-    if filename != os.path.basename(filename):
-        return jsonify({'error': 'File not found'}), 404, {'Content-Type': 'application/json'}
-
-    # Если файл существует, выдаем его на скачивание в JSON формате
-    return send_file(os.path.join(os.getcwd(), 'files', filename), as_attachment=True), 200, {'Content-Type': 'application/json'}
 
 
 @app.route("/load", methods=["POST"])
@@ -112,6 +113,8 @@ def load_file():
     """
     It uploads a file to a server
     """
+    if lock_load_file and request.args.get('key') != password:
+        return jsonify({'error': 'Access denied'}), 403, {'Content-Type': 'application/json'}
     # Получаем файл из POST запроса
     file = request.files.get("file")
 
@@ -139,17 +142,17 @@ def load_file():
 
     # Проверяем, что на главном сервере достаточно свободного места для сохранения файла
     if file_size >= free_space:
-        for BACKUP_SERVER_URL in nodes:
+        for node in nodes:
             try:
-                free = requests.get(f'{BACKUP_SERVER_URL}/status').json()['free_space']
-            except requests.exceptions.ConnectionError:
+                free = requests.get(f'{node}/status', params={'key': password}).json()['free_space']
+            except:
                 continue
             if free > file_size:
                 # Если на ноде есть свободное место, загружаем файл на диск
-                response = requests.post(f'{BACKUP_SERVER_URL}/load', files={'file': file})
+                response = requests.post(f'{node}/load', files={'file': file}, params={'key': password})
                 if response.status_code == 200:
                     # Если файл успешно сохранен на резервном сервере, возвращаем ссылку на него
-                    return jsonify({'file_link': f'{BACKUP_SERVER_URL}/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
+                    return jsonify({'file_link': f'{node}/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
                 else:
                     # Если произошла ошибка при сохранении файла на резервном сервере, возвращаем ошибку
                     continue
@@ -165,12 +168,18 @@ def load_file():
 
 @app.route('/status', methods=["GET"])
 def status():
+    if lock_status and request.args.get('key') != password:
+        return jsonify({'error': 'Access denied'}), 403, {'Content-Type': 'application/json'}
     # Получаем информацию о диске
     usage = psutil.disk_usage("/")
     # Вычисляем свободное место в байтах
     free_space = int(usage.free / 1024)
     # Возвращаем JSON-ответ с информацией о свободном месте на сервере
     return jsonify({'free_space': free_space})
+
+@app.route('/config', methods=["GET"])
+def config():
+    return jsonify({'lock_get_file': lock_get_file, 'lock_load_file': lock_load_file, 'lock_status': lock_status})
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=80)

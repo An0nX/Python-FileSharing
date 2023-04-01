@@ -3,11 +3,22 @@ from collections import deque
 import time
 import os
 import psutil
+import requests
 
 app = Flask(__name__)
 
 if not os.path.exists('files'):
     os.makedirs('files')
+
+control_host = 'CONTROLHOST'
+
+# Создаем переменные-блокираторы и пароль
+r = requests.get(f'{control_host}/config').json()
+lock_get_file = r['lock_get_file']
+lock_load_file = r['lock_load_file']
+lock_status = r['lock_status']
+
+password = r'YOURPASSHERE'
 
 # Создаем словарь для хранения очередей запросов от каждого IP
 ip_queue = {}
@@ -60,6 +71,8 @@ def get_file(filename):
     
     :param filename: The name of the file you want to download
     """
+    if lock_get_file and request.args.get('key') != password:
+        return jsonify({'error': 'Access denied'}), 403, {'Content-Type': 'application/json'}
     return (
         (
             open(os.path.join('files', filename), 'r').read(),
@@ -75,30 +88,13 @@ def get_file(filename):
     )
 
 
-@app.route("/download/<filename>")
-def download_file(filename):
-    """
-    It downloads a file from the server.
-    
-    :param filename: The name of the file you want to download
-    """
-    # Проверяем, что запрашиваемый файл существует
-    if not os.path.isfile(os.path.join(os.getcwd(), 'files', filename)):
-        return jsonify({'error': 'File not found'}), 404, {'Content-Type': 'application/json'}
-
-    # Проверяем, что запрашиваемый файл соответствует требуемому файлу
-    if filename != os.path.basename(filename):
-        return jsonify({'error': 'File not found'}), 404, {'Content-Type': 'application/json'}
-
-    # Если файл существует, выдаем его на скачивание в JSON формате
-    return send_file(os.path.join(os.getcwd(), 'files', filename), as_attachment=True), 200, {'Content-Type': 'application/json'}
-
-
 @app.route("/load", methods=["POST"])
 def load_file():
     """
     It uploads a file to a server
     """
+    if lock_load_file and request.args.get('key') != password:
+        return jsonify({'error': 'Access denied'}), 403, {'Content-Type': 'application/json'}
     # Получаем файл из POST запроса
     file = request.files.get("file")
 
@@ -122,13 +118,25 @@ def load_file():
     file.seek(0) # сбрасываем указатель на начало файла
     file.save(os.path.join(os.getcwd(), 'files', filename))
 
+    # Получаем hostname сервера
+    hostname = socket.gethostname()
+    # Получаем IP-адрес сервера
+    ip_address = socket.gethostbyname(hostname)
+
+    # Формируем ссылку на сервер
+    server_url = f"http://{ip_address}"
+    if request.host:
+        server_url = f"{request.scheme}://{request.host}"
+
     # Возвращаем ссылку на загруженный файл в JSON формате
-    return jsonify({'file_link': f'/download/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
+    return jsonify({'file_link': f'{server_url}/download/{os.path.basename(filename)}'}), 200, {'Content-Type': 'application/json'}
 
 
 
 @app.route('/status', methods=["GET"])
 def status():
+    if lock_status and request.args.get('key') != password:
+        return jsonify({'error': 'Access denied'}), 403, {'Content-Type': 'application/json'}
     # Получаем информацию о диске
     usage = psutil.disk_usage("/")
     # Вычисляем свободное место в байтах

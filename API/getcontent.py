@@ -1,10 +1,19 @@
 import requests
+from json.decoder import JSONDecodeError
 
 fname = input('Введите имя файла для чтения: ')
 
-url = f'http://127.0.0.1:5000/{fname}'
+url = input("Ссылка для загрузки: ")
+
+response = requests.get(f'{url}/config').json()['lock_get_file']
 
 # Отправляем GET-запрос на сервер, чтобы скачать файл
-response = requests.get(url)
+if response:
+    response = requests.get(f'{url}/{fname}', params={'key': input('Введите пароль: ')})
+else:
+    response = requests.get(f'{url}/{fname}')
 
-print(response.text)
+try:
+    print(f'\nОшибка: {response.json()["error"]}\n')
+except JSONDecodeError:
+    print(f'\nРезультат:\n{response.text}\n')
