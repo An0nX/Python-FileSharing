@@ -98,12 +98,18 @@ def load_file():
     # Получаем файл из POST запроса
     file = request.files.get("file")
 
+    # Получаем имя файла без расширения из параметра запроса
+    if request.args.get('filename'):
+        filename = f"{request.args.get('filename')}.txt"
+    else:
+        return jsonify({'error': 'Invalid filename'}), 400, {'Content-Type': 'application/json'}
+    
+    if os.path.isfile(os.path.join('files', filename)):
+        os.remove(os.path.join('files', filename))
+
     # Проверяем, что файл получен и имеет допустимое расширение
     if not file or not file.filename.endswith(('.txt')):
         return jsonify({'error': 'Invalid file'}), 400, {'Content-Type': 'application/json'}
-
-    # Получаем имя файла с расширением
-    filename = file.filename
 
     # Получаем информацию о свободном месте на диске в килобайтах
     free_space = psutil.disk_usage('/').free // 1024
